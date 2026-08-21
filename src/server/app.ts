@@ -20,6 +20,7 @@ import { boardRouter } from './routes/board.js'
 import { groupsRouter } from './routes/groups.js'
 import { mapRouter } from './routes/map.js'
 import { parksRouter } from './routes/parks.js'
+import { photosRouter } from './routes/photos.js'
 
 export function createApp(repo: Repo): Express {
   const app = express()
@@ -39,6 +40,7 @@ export function createApp(repo: Repo): Express {
     groupsRouter(repo),
     mapRouter(repo),
     parksRouter(repo),
+    photosRouter(repo),
   ]) {
     app.use('/api', router)
   }
