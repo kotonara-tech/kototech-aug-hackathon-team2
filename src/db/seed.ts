@@ -5,7 +5,7 @@ import { createActivity, transition } from '../domain/activity.js'
 import { joinEvent } from '../domain/event.js'
 import { createPost } from '../domain/board.js'
 import { calculateIncentive } from '../domain/incentive.js'
-import type { Actor, VolunteerEvent } from '../domain/types.js'
+import type { Actor, Park, VolunteerEvent } from '../domain/types.js'
 
 export const WARDS = [
   { id: 'saho', name: '佐保', lat: 34.697, lng: 135.808 },
@@ -96,6 +96,31 @@ export function seedBaseline(repo: Repo): void {
 const CITY: Actor = { id: 'u-city', role: 'city', groupId: null }
 const asGroup = (groupId: string): Actor => ({ id: `u-group-${groupId.slice(2)}`, role: 'group', groupId })
 
+/**
+ * 公園マスタ（デモ用）。
+ * 座標はデモ用の概算値であり奈良市の公式データではない。実運用では奈良市の公園台帳等に差し替える。
+ * 「未清掃」の公園を含めて3パターン（未清掃／1年以上放置／直近清掃済み）が揃うように
+ * DEMO_ACTIVITIES 側の parkId 割り当てと合わせて調整している。
+ */
+const PARKS: Park[] = [
+  // --- 直近清掃済み（DEMO_ACTIVITIES で parkId を割り当てる） ---
+  { id: 'park-nara-koen', name: '奈良公園', wardId: 'nara-park', lat: 34.6873, lng: 135.8398 },
+  { id: 'park-konoike', name: '鴻ノ池運動公園', wardId: 'saho', lat: 34.7025, lng: 135.8033 },
+  { id: 'park-sahogawa', name: '佐保川河川敷緑地', wardId: 'sahogawa', lat: 34.669, lng: 135.8105 },
+  { id: 'park-mugitani', name: 'ならまち麦谷公園', wardId: 'naramachi', lat: 34.6765, lng: 135.8285 },
+  { id: 'park-omiya', name: '大宮南公園', wardId: 'omiya', lat: 34.6855, lng: 135.8115 },
+  { id: 'park-kasugano', name: '春日野園地', wardId: 'mikasa', lat: 34.6825, lng: 135.8465 },
+  // --- 1年以上放置（DEMO_ACTIVITIES に古い日付の実績を追加して割り当てる） ---
+  { id: 'park-heijo', name: '平城宮跡歴史公園', wardId: 'heijo', lat: 34.6851, lng: 135.7955 },
+  { id: 'park-daianji', name: '大安寺西公園', wardId: 'rokujo', lat: 34.663, lng: 135.786 },
+  { id: 'park-akishinogawa', name: '秋篠川緑地公園', wardId: 'miyato', lat: 34.681, lng: 135.776 },
+  // --- 一度も未清掃（どの活動にも紐づけない） ---
+  { id: 'park-gakuenmae', name: '学園前中央公園', wardId: 'tomigaoka', lat: 34.709, lng: 135.729 },
+  { id: 'park-tomiogawa', name: '富雄川親水公園', wardId: 'tomio', lat: 34.685, lng: 135.732 },
+  { id: 'park-obitoke', name: '帯解グラウンド公園', wardId: 'obitoke', lat: 34.639, lng: 135.806 },
+  { id: 'park-tsuge', name: '都祁高原公園', wardId: 'tsuge', lat: 34.607, lng: 135.928 },
+]
+
 interface DemoActivity {
   groupId: string
   title: string
@@ -107,20 +132,30 @@ interface DemoActivity {
   participants: number
   hours: number
   garbageKg: number
+  /** 清掃対象の公園マスタID。指定すると公園の清掃実績として集計される */
+  parkId?: string
 }
 
 const DEMO_ACTIVITIES: DemoActivity[] = [
-  { groupId: 'g-a', title: '佐保川 桜並木クリーン作戦', wardId: 'saho', date: '2026-04-05', lat: 34.697, lng: 135.808, address: '奈良市法蓮町 佐保川河川敷', participants: 24, hours: 2, garbageKg: 58.5 },
-  { groupId: 'g-a', title: '佐保川 定例清掃（5月）', wardId: 'saho', date: '2026-05-10', lat: 34.699, lng: 135.809, address: '奈良市法蓮町 佐保川河川敷', participants: 18, hours: 2, garbageKg: 42 },
-  { groupId: 'g-a', title: '佐保川 定例清掃（6月）', wardId: 'sahogawa', date: '2026-06-07', lat: 34.671, lng: 135.812, address: '奈良市杏町 佐保川下流', participants: 21, hours: 2, garbageKg: 47.5 },
-  { groupId: 'g-b', title: 'ならまち格子の家周辺 美化活動', wardId: 'naramachi', date: '2026-04-19', lat: 34.678, lng: 135.83, address: '奈良市元興寺町', participants: 15, hours: 1.5, garbageKg: 31 },
-  { groupId: 'g-b', title: '猿沢池ライトアップ後の清掃', wardId: 'nara-park', date: '2026-05-24', lat: 34.681, lng: 135.833, address: '奈良市登大路町 猿沢池', participants: 30, hours: 2, garbageKg: 76.5 },
-  { groupId: 'g-c', title: '大学前 通学路クリーンアップ', wardId: 'omiya', date: '2026-06-13', lat: 34.686, lng: 135.812, address: '奈良市北魚屋東町', participants: 12, hours: 1, garbageKg: 18.5 },
-  { groupId: 'g-c', title: '若草山ふもと ごみ拾いウォーク', wardId: 'mikasa', date: '2026-07-04', lat: 34.7, lng: 135.84, address: '奈良市雑司町', participants: 26, hours: 2, garbageKg: 39 },
-  { groupId: 'g-b', title: '東向商店街 早朝清掃', wardId: 'naramachi', date: '2026-07-12', lat: 34.684, lng: 135.827, address: '奈良市東向中町', participants: 9, hours: 1, garbageKg: 12.5 },
+  // --- 直近清掃済み（2026年4〜7月） ---
+  { groupId: 'g-a', title: '佐保川 桜並木クリーン作戦', wardId: 'saho', date: '2026-04-05', lat: 34.697, lng: 135.808, address: '奈良市法蓮町 佐保川河川敷', participants: 24, hours: 2, garbageKg: 58.5, parkId: 'park-konoike' },
+  { groupId: 'g-a', title: '佐保川 定例清掃（5月）', wardId: 'saho', date: '2026-05-10', lat: 34.699, lng: 135.809, address: '奈良市法蓮町 佐保川河川敷', participants: 18, hours: 2, garbageKg: 42, parkId: 'park-konoike' },
+  { groupId: 'g-a', title: '佐保川 定例清掃（6月）', wardId: 'sahogawa', date: '2026-06-07', lat: 34.671, lng: 135.812, address: '奈良市杏町 佐保川下流', participants: 21, hours: 2, garbageKg: 47.5, parkId: 'park-sahogawa' },
+  { groupId: 'g-b', title: 'ならまち格子の家周辺 美化活動', wardId: 'naramachi', date: '2026-04-19', lat: 34.678, lng: 135.83, address: '奈良市元興寺町', participants: 15, hours: 1.5, garbageKg: 31, parkId: 'park-mugitani' },
+  { groupId: 'g-b', title: '猿沢池ライトアップ後の清掃', wardId: 'nara-park', date: '2026-05-24', lat: 34.681, lng: 135.833, address: '奈良市登大路町 猿沢池', participants: 30, hours: 2, garbageKg: 76.5, parkId: 'park-nara-koen' },
+  { groupId: 'g-c', title: '大学前 通学路クリーンアップ', wardId: 'omiya', date: '2026-06-13', lat: 34.686, lng: 135.812, address: '奈良市北魚屋東町', participants: 12, hours: 1, garbageKg: 18.5, parkId: 'park-omiya' },
+  { groupId: 'g-c', title: '若草山ふもと ごみ拾いウォーク', wardId: 'mikasa', date: '2026-07-04', lat: 34.7, lng: 135.84, address: '奈良市雑司町', participants: 26, hours: 2, garbageKg: 39, parkId: 'park-kasugano' },
+  { groupId: 'g-b', title: '東向商店街 早朝清掃', wardId: 'naramachi', date: '2026-07-12', lat: 34.684, lng: 135.827, address: '奈良市東向中町', participants: 9, hours: 1, garbageKg: 12.5, parkId: 'park-mugitani' },
+  // --- 1年以上放置（2024〜2025年前半に確認済みの実績を残し、以降は誰も清掃していない） ---
+  { groupId: 'g-b', title: '平城宮跡 冬の一斉清掃', wardId: 'heijo', date: '2024-11-09', lat: 34.6851, lng: 135.7955, address: '奈良市佐紀町 平城宮跡歴史公園', participants: 20, hours: 2, garbageKg: 33.5, parkId: 'park-heijo' },
+  { groupId: 'g-a', title: '大安寺西公園 春の清掃活動', wardId: 'rokujo', date: '2025-03-15', lat: 34.663, lng: 135.786, address: '奈良市大安寺西二丁目', participants: 14, hours: 1.5, garbageKg: 22, parkId: 'park-daianji' },
+  { groupId: 'g-c', title: '秋篠川緑地 清掃ボランティア', wardId: 'miyato', date: '2025-06-01', lat: 34.681, lng: 135.776, address: '奈良市秋篠町 秋篠川緑地', participants: 10, hours: 1, garbageKg: 15.5, parkId: 'park-akishinogawa' },
 ]
 
 export function seedDemo(repo: Repo, now = new Date().toISOString()): void {
+  // 公園マスタを先に投入する（清掃実績側から parkId で参照するため）
+  for (const p of PARKS) repo.upsertPark(p)
+
   // 過去の活動: 申請 → 承認 → 報告 → 確認 まで通し、実績として地図に載る状態にする
   for (const d of DEMO_ACTIVITIES) {
     const actor = asGroup(d.groupId)
@@ -136,6 +171,8 @@ export function seedDemo(repo: Repo, now = new Date().toISOString()): void {
       },
       `${d.date}T00:00:00.000Z`,
     )
+    // createActivity は parkId を引き継がないため、生成直後に付与する（以降 transition は spread で保持する）
+    if (d.parkId) activity = { ...activity, parkId: d.parkId }
     const at = `${d.date}T09:00:00.000Z`
     activity = transition(activity, { type: 'submit', actor }, at)
     activity = transition(activity, { type: 'approve', actor: CITY }, at)

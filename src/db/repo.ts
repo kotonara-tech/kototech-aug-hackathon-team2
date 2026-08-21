@@ -1,6 +1,6 @@
 /** データアクセス層。SQL はここに閉じ込め、上位にはドメイン型だけを渡す。 */
 import type { DatabaseSync } from 'node:sqlite'
-import type { Activity, BankAccount, BoardPost, PaymentRecord, VolunteerEvent } from '../domain/types.js'
+import type { Activity, BankAccount, BoardPost, Park, PaymentRecord, VolunteerEvent } from '../domain/types.js'
 
 export interface GroupRow {
   id: string
@@ -58,6 +58,21 @@ export class Repo {
   wardName(id: string): string {
     const row = this.db.prepare('SELECT name FROM wards WHERE id = ?').get(id) as { name?: string } | undefined
     return row?.name ?? id
+  }
+
+  /* ---------------- 公園マスタ ---------------- */
+
+  upsertPark(p: Park): void {
+    this.db
+      .prepare('INSERT OR REPLACE INTO parks (id, name, ward_id, lat, lng) VALUES (?, ?, ?, ?, ?)')
+      .run(p.id, p.name, p.wardId, p.lat, p.lng)
+  }
+
+  listParks(): Park[] {
+    const rows = this.db
+      .prepare('SELECT id, name, ward_id, lat, lng FROM parks ORDER BY id')
+      .all() as unknown as { id: string; name: string; ward_id: string; lat: number; lng: number }[]
+    return rows.map((r) => ({ id: r.id, name: r.name, wardId: r.ward_id, lat: r.lat, lng: r.lng }))
   }
 
   /* ---------------- 団体・利用者 ---------------- */
@@ -196,14 +211,23 @@ export class Repo {
     return rows.map((r) => JSON.parse(r.data) as PaymentRecord)
   }
 
-  /** 年度内に支払確定・支払済となった金額の合計（年間上限の判定に使う） */
-  yearToDatePaid(groupId: string, fiscalYear: number): number {
+  /**
+   * 年度内に充当済みの金額の合計（年間上限の判定に使う）。
+   * pending（未確定）も含めて集計する。未確定の支払を除外すると、
+   * 同一年度内に複数の活動を並行して確認した際に年間上限を突破しうるため。
+   * excludeActivityId を指定すると、その活動自身の支払レコードを集計から除外する
+   * （同じ活動の支払を再算定する際の自己二重計上を防ぐ）。
+   */
+  yearToDatePaid(groupId: string, fiscalYear: number, excludeActivityId?: string): number {
+    const excludeClause = excludeActivityId ? ' AND activity_id <> ?' : ''
+    const params = excludeActivityId ? [groupId, fiscalYear, excludeActivityId] : [groupId, fiscalYear]
     const r = this.db
       .prepare(
         `SELECT COALESCE(SUM(json_extract(data, '$.amount')), 0) AS total
-         FROM payments WHERE group_id = ? AND fiscal_year = ? AND status IN ('scheduled','paid')`,
+         FROM payments
+         WHERE group_id = ? AND fiscal_year = ? AND status IN ('pending','scheduled','paid')${excludeClause}`,
       )
-      .get(groupId, fiscalYear) as { total?: number } | undefined
+      .get(...params) as { total?: number } | undefined
     return Number(r?.total ?? 0)
   }
 

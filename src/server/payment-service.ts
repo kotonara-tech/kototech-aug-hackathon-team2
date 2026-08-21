@@ -12,7 +12,8 @@ export function createPaymentFor(repo: Repo, activity: Activity, at: string): vo
   const fy = fiscalYearOf(at)
   const { amount, cappedBy } = calculateIncentive(
     { garbageKg: report.garbageKg, actualParticipants: report.actualParticipants, hours: report.hours },
-    { yearToDatePaid: repo.yearToDatePaid(activity.groupId, fy) },
+    // 同じ活動の支払を再算定する場合に自己二重計上しないよう、自分自身の支払レコードは除外する
+    { yearToDatePaid: repo.yearToDatePaid(activity.groupId, fy, activity.id) },
   )
 
   repo.savePayment(

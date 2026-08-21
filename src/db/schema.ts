@@ -18,6 +18,14 @@ CREATE TABLE IF NOT EXISTS wards (
   lng   REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS parks (
+  id       TEXT PRIMARY KEY,
+  name     TEXT NOT NULL,
+  ward_id  TEXT NOT NULL,
+  lat      REAL NOT NULL,
+  lng      REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS groups (
   id            TEXT PRIMARY KEY,
   name          TEXT NOT NULL,

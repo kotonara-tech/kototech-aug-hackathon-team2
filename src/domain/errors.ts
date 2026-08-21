@@ -19,4 +19,5 @@ export const HTTP_STATUS_BY_CODE: Record<string, number> = {
   VALIDATION: 400,
   EMPTY: 400,
   TOO_LONG: 400,
+  TOO_LARGE: 413,
 }

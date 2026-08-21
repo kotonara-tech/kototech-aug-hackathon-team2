@@ -60,6 +60,8 @@ export interface Activity {
   verifiedAt: string | null
   createdAt: string
   history: HistoryEntry[]
+  /** 清掃対象の公園マスタ ID（未紐付けの活動があるため任意） */
+  parkId?: string
 }
 
 export interface NewActivityInput {
@@ -70,6 +72,18 @@ export interface NewActivityInput {
   location: GeoPoint
   plannedParticipants: number
   consecutiveMonths?: number
+  /** 清掃対象の公園マスタ ID（未紐付けの活動があるため任意） */
+  parkId?: string
+}
+
+/* ---------------- 公園マスタ ---------------- */
+
+export interface Park {
+  id: string
+  name: string
+  wardId: string
+  lat: number
+  lng: number
 }
 
 /* ---------------- インセンティブ（奨励金） ---------------- */

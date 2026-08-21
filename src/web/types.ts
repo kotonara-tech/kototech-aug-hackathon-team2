@@ -142,3 +142,22 @@ export interface Ward {
   lat: number
   lng: number
 }
+
+/** GET /parks, GET /map/parks が返す、公園ごとの清掃実績サマリ */
+export interface ParkCleanupStatusDto {
+  parkId: string
+  name: string
+  wardId: string
+  wardName: string
+  lat: number
+  lng: number
+  /** 最後に清掃された日（YYYY-MM-DD）。一度も清掃されていなければ null */
+  lastCleanedOn: string | null
+  /** 最終清掃からの経過日数。未清掃なら null */
+  daysSinceCleaned: number | null
+  lastCleanedGroupId: string | null
+  lastCleanedGroupName: string | null
+  cleanupCount: number
+  /** 未清掃 / 1年以上放置 / 直近清掃済み の区分 */
+  neglect: 'never' | 'over-year' | 'recent'
+}
