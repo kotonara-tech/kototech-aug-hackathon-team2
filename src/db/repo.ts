@@ -1,6 +1,6 @@
 /** データアクセス層。SQL はここに閉じ込め、上位にはドメイン型だけを渡す。 */
 import type { DatabaseSync } from 'node:sqlite'
-import type { Activity, BankAccount, BoardPost, PaymentRecord, VolunteerEvent } from '../domain/types.js'
+import type { Activity, BankAccount, BoardPost, Park, PaymentRecord, VolunteerEvent } from '../domain/types.js'
 
 export interface GroupRow {
   id: string
@@ -58,6 +58,21 @@ export class Repo {
   wardName(id: string): string {
     const row = this.db.prepare('SELECT name FROM wards WHERE id = ?').get(id) as { name?: string } | undefined
     return row?.name ?? id
+  }
+
+  /* ---------------- 公園マスタ ---------------- */
+
+  upsertPark(p: Park): void {
+    this.db
+      .prepare('INSERT OR REPLACE INTO parks (id, name, ward_id, lat, lng) VALUES (?, ?, ?, ?, ?)')
+      .run(p.id, p.name, p.wardId, p.lat, p.lng)
+  }
+
+  listParks(): Park[] {
+    const rows = this.db
+      .prepare('SELECT id, name, ward_id, lat, lng FROM parks ORDER BY id')
+      .all() as unknown as { id: string; name: string; ward_id: string; lat: number; lng: number }[]
+    return rows.map((r) => ({ id: r.id, name: r.name, wardId: r.ward_id, lat: r.lat, lng: r.lng }))
   }
 
   /* ---------------- 団体・利用者 ---------------- */

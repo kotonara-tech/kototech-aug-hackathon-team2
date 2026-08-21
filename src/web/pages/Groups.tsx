@@ -1,19 +1,65 @@
 import { useState } from 'react'
 import { useApi } from '../api'
-import type { GroupDetail, GroupSummary } from '../types'
+import type { GroupDetail, GroupSummary, ParkCleanupStatusDto } from '../types'
 import { Empty, RankBadge, StatusBadge, formatDate } from '../components/ui'
+import { MapView } from '../components/MapView'
+
+/** 未清掃 / 1年以上放置 / 直近清掃済み のバッジ表示 */
+function NeglectBadge({ neglect }: { neglect: ParkCleanupStatusDto['neglect'] }) {
+  if (neglect === 'never') return <span className="badge danger">未清掃</span>
+  if (neglect === 'over-year') return <span className="badge warn">1年以上</span>
+  return <span className="badge ok">直近</span>
+}
 
 export function Groups() {
   const { data } = useApi<GroupSummary[]>('/groups')
+  const { data: parks } = useApi<ParkCleanupStatusDto[]>('/parks')
   const [selected, setSelected] = useState<string | null>(null)
 
   return (
     <>
       <h1>団体の活動状況</h1>
       <p className="page-lead">
-        どの団体がどこで活動しているかを相互に確認できます。重複や空白地帯を避け、団体同士の連携につなげるための画面です。
+        団体間で清掃先が重複しないよう、まだ手つかずの公園をここで共有します。地図と一覧で「最後に清掃されてから時間が経っている公園」を確認し、次の清掃先を選ぶための画面です。
       </p>
 
+      <MapView initialMode="parks" />
+
+      <h2>清掃地点リスト</h2>
+      <p className="muted">最後に清掃されてから時間が経っている公園を先頭に並べています。</p>
+      <div className="card table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>公園</th>
+              <th>地区</th>
+              <th>状態</th>
+              <th>最終清掃日</th>
+              <th className="num">経過日数</th>
+              <th className="num">清掃回数</th>
+              <th>最終清掃団体</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(parks ?? []).map((p) => (
+              <tr key={p.parkId}>
+                <td>{p.name}</td>
+                <td>{p.wardName}</td>
+                <td>
+                  <NeglectBadge neglect={p.neglect} />
+                </td>
+                <td>{p.lastCleanedOn ? formatDate(p.lastCleanedOn) : '—'}</td>
+                <td className="num">{p.daysSinceCleaned !== null ? `${p.daysSinceCleaned}日` : '清掃記録なし'}</td>
+                <td className="num">{p.cleanupCount}</td>
+                <td>{p.lastCleanedGroupName ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(parks ?? []).length === 0 && <Empty>公園データがまだありません</Empty>}
+      </div>
+
+      <h2>団体別の実績</h2>
       <div className="card table-scroll">
         <table>
           <thead>
