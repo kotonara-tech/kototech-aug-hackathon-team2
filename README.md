@@ -73,9 +73,45 @@ src/
   domain/    ビジネスルール（外部依存なし・テストの中心）
   db/        SQLite 永続化（node:sqlite・ネイティブ依存なし）
   server/    Express API（認証・入力検証・DTO整形のみ）
+    routes/  機能ごとのルート定義（並行開発でぶつからないよう分割）
   web/       React + Vite + Leaflet
-tests/       Vitest（ドメイン 68件 / API 40件 ほか）
+tests/       Vitest（112件）
 ```
+
+## チーム開発の進め方
+
+### 担当分け（機能の縦割り）
+
+レイヤーで分けると待ちが発生するため、1人が domain → server → web まで縦に持ちます。
+
+| 担当 | 機能 | 主に触るファイル |
+| --- | --- | --- |
+| A | 活動管理・インセンティブ | `domain/activity.ts` `domain/incentive.ts` `server/routes/activities.ts` `payments.ts` `web/pages/Activities.tsx` `Payments.tsx` |
+| B | イベント募集・ポイント制 | `domain/event.ts` `domain/points.ts` `server/routes/events.ts` `web/pages/Events.tsx` `MyPage.tsx` |
+| C | 地図・団体間連携 | `domain/geo.ts` `domain/board.ts` `server/routes/map.ts` `board.ts` `groups.ts` `web/pages/Dashboard.tsx` `Groups.tsx` `Board.tsx` |
+
+3人が同時に触るファイル（コンフリクトしやすい箇所）は次の3つだけです。変更するときは一声かけてください。
+
+- `src/server/app.ts` — ルートを追加したときだけ（1行）
+- `src/web/App.tsx` — タブを追加したときだけ（`TABS` 配列）
+- `src/db/schema.ts` — テーブルを追加したとき
+
+### ブランチ運用
+
+```bash
+git pull --rebase origin main          # 作業開始前に必ず最新化
+git switch -c feat/event-waitlist      # 機能ごとにブランチを切る
+npm test                               # 緑になってからコミット
+git push -u origin feat/event-waitlist # → GitHub で Pull Request
+```
+
+ルールは3つだけ。
+
+1. **main に直接 push しない**（PR経由でレビューを1人つける）
+2. **`npm test` が緑でないものは PR にしない**
+3. **PR は小さく**（1機能・1日以内）。長生きしたブランチほどマージが大変になります
+
+PR を出すと GitHub Actions が型チェック・テスト・ビルドを自動実行します（`.github/workflows/ci.yml`）。
 
 ## 本番導入にあたって差し替えが必要な箇所
 
