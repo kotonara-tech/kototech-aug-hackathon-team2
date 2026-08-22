@@ -393,6 +393,31 @@ function ReportForm({
     })
   }
 
+  function demoPhoto(name: string): File {
+    const base64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlNobwAAAAASUVORK5CYII='
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))
+    return new File([bytes], name, { type: 'image/png' })
+  }
+
+  function setDemoInput() {
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
+    setBeforePhoto(demoPhoto('活動前-demo.png'))
+    setAfterPhoto(demoPhoto('活動後-demo.png'))
+    setForm({
+      ...form,
+      actualParticipants: 10,
+      hours: 1,
+      garbageKg: 8,
+      workTypes: ['cleanup'],
+      pickupRequired: true,
+      wasteTypes: ['burnable'],
+      bagCount: 3,
+      preferredDate: tomorrow,
+      pickupNote: 'デモ用の回収依頼です。',
+      comment: 'デモ用の活動報告です。',
+    })
+  }
+
   async function submit() {
     if (!beforePhoto || !afterPhoto) {
       setError('活動前と活動後の写真をそれぞれ選択してください')
@@ -440,6 +465,12 @@ function ReportForm({
     <div className="card" style={{ marginBottom: '1rem' }}>
       <h2 style={{ marginTop: 0 }}>活動報告・ごみ回収依頼 — {activity.title}</h2>
       {error && <div className="alert error">{error}</div>}
+      <div className="alert info spread">
+        <span>デモでは、写真を用意しなくても一連の操作を確認できます。</span>
+        <button className="ghost" onClick={setDemoInput}>
+          デモ入力をセット
+        </button>
+      </div>
       <div className="grid cols-3">
         <div className="field">
           <label>実参加人数</label>

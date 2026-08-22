@@ -249,6 +249,21 @@ export function seedDemo(repo: Repo, now = new Date().toISOString()): void {
   )
   repo.saveActivity(pending)
 
+  // 団体デモ用: 事前承認なしで「活動報告・ごみ回収依頼」を試せる下書き。
+  const demoDraft = createActivity(
+    {
+      groupId: 'g-a',
+      title: '【デモ用】鴻ノ池公園 定例清掃',
+      wardId: 'saho',
+      scheduledDate: '2026-08-23',
+      location: { lat: 34.7025, lng: 135.8033, address: '鴻ノ池運動公園 南口' },
+      plannedParticipants: 10,
+      parkId: 'park-konoike',
+    },
+    now,
+  )
+  repo.saveActivity(demoDraft)
+
   // 募集中のイベント
   const events: VolunteerEvent[] = [
     {

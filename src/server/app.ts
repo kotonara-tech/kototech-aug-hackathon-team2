@@ -30,7 +30,7 @@ export function createApp(repo: Repo): Express {
   app.use(express.json({ limit: '2mb' }))
   app.use('/api', authenticate(repo))
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true }))
+  app.get('/api/health', (_req, res) => res.json({ ok: true, apiVersion: 'green-support-v2' }))
 
   for (const router of [
     meRouter(repo),
