@@ -12,7 +12,7 @@ export default defineConfig({
     port: 5173,
     // '^' 始まりのキーは正規表現として扱われる。前方一致の '/api' にすると
     // フロントの /api.ts まで転送されてモジュール読込が 404 になる。
-    proxy: { '^/api/': 'http://localhost:8787' },
+    proxy: { '^/api/': process.env.VITE_API_TARGET ?? 'http://localhost:8787' },
   },
   build: { outDir: '../../dist/web', emptyOutDir: true },
 })

@@ -45,8 +45,15 @@ export function mapRouter(repo: Repo): Router {
       totalGroups: repo.listGroups().length,
       activeWards: new Set(acts.map((a) => a.wardId)).size,
       openEvents: repo.listEvents().filter((e) => isOpen(e, new Date().toISOString())).length,
-      pendingReviews: repo.listActivities({ status: 'submitted' }).length,
+      pendingReviews: repo.listActivities({ status: 'reported' }).length,
       pendingPayments: repo.listPayments().filter((p) => p.status === 'pending').length,
+      pendingPickups: repo
+        .listActivities()
+        .filter((activity) =>
+          activity.pickupRequest
+            ? activity.pickupRequest.status === 'requested' || activity.pickupRequest.status === 'scheduled'
+            : false,
+        ).length,
     })
   })
 

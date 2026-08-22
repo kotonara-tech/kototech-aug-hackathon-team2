@@ -32,7 +32,39 @@ export interface ActivityReport {
   hours: number
   garbageKg: number
   photoUrls: string[]
+  /** 現地巡回の代替証跡。直接報告する新フローでは前後1枚以上を必須とする。 */
+  beforePhotoUrls?: string[]
+  afterPhotoUrls?: string[]
+  /** グリーンサポート制度で実施した作業。未指定の旧データは清掃として扱う。 */
+  workTypes?: WorkType[]
   comment: string
+}
+
+export type WorkType = 'cleanup' | 'weeding' | 'pruning' | 'planting' | 'other'
+export type WasteType = 'burnable' | 'nonBurnable' | 'branches' | 'grass' | 'other'
+export type PickupStatus = 'not_required' | 'requested' | 'scheduled' | 'collected'
+
+export type PickupRequestInput =
+  | { required: false }
+  | {
+      required: true
+      wasteTypes: WasteType[]
+      bagCount: number
+      location: GeoPoint
+      preferredDate: string
+      note: string
+    }
+
+export interface PickupRequest {
+  status: PickupStatus
+  wasteTypes: WasteType[]
+  bagCount: number
+  location: GeoPoint | null
+  preferredDate: string | null
+  note: string
+  requestedAt: string | null
+  scheduledDate: string | null
+  collectedAt: string | null
 }
 
 export interface HistoryEntry {
@@ -54,6 +86,8 @@ export interface Activity {
   /** 継続ボーナス算定用: 申請時点での連続活動月数 */
   consecutiveMonths: number
   report: ActivityReport | null
+  /** 活動報告と同時に受け付けるごみ回収依頼 */
+  pickupRequest?: PickupRequest | null
   awardedPoints: number
   rejectionReason: string | null
   submittedAt: string | null

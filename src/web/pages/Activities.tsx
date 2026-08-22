@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { api, useApi } from '../api'
-import type { Activity, Me, Ward } from '../types'
+import type { Activity, Me, ParkCleanupStatusDto, Ward } from '../types'
 import { Empty, StatusBadge, formatDate, formatDateTime } from '../components/ui'
 
 const ACTION_LABEL: Record<string, string> = {
-  submit: '市に申請',
+  submit: '市に申請（旧フロー）',
   approve: '承認',
   reject: '却下',
-  report: '報告書を提出',
-  returnReport: '差し戻し',
-  verify: '実績を確定',
+  report: '活動報告・回収依頼を送信',
+  returnReport: '修正を依頼',
+  verify: '写真確認済みにする',
   markPaid: '支払済みにする',
   cancel: '中止',
 }
@@ -20,19 +20,25 @@ function nextActions(a: Activity, me: Me): string[] {
   if (me.role === 'city') {
     if (a.status === 'submitted') return ['approve', 'reject']
     if (a.status === 'reported') return ['verify', 'returnReport']
-    if (a.status === 'verified') return ['markPaid']
     return []
   }
   if (!isOwner) return []
-  if (a.status === 'draft') return ['submit', 'cancel']
+  if (a.status === 'draft') return ['report', 'cancel']
   if (a.status === 'approved') return ['report']
   return []
 }
 
 export function Activities({ me }: { me: Me }) {
-  const [filter, setFilter] = useState<string>(me.role === 'city' ? 'submitted' : '')
-  const query = filter ? `/activities?status=${filter}` : '/activities'
+  const [filter, setFilter] = useState<string>(me.role === 'city' ? 'pickup' : '')
+  const query = filter && filter !== 'pickup' ? `/activities?status=${filter}` : '/activities'
   const { data, error, reload } = useApi<Activity[]>(query, [filter])
+  const visibleActivities =
+    filter === 'pickup'
+      ? (data ?? []).filter(
+          (activity) =>
+            activity.pickupRequest?.status === 'requested' || activity.pickupRequest?.status === 'scheduled',
+        )
+      : (data ?? [])
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -58,19 +64,39 @@ export function Activities({ me }: { me: Me }) {
     }
   }
 
+  async function runPickup(a: Activity, type: 'schedule' | 'complete') {
+    let payload: Record<string, unknown> = { type }
+    if (type === 'schedule') {
+      const scheduledDate = prompt('回収予定日を入力してください（YYYY-MM-DD）', a.pickupRequest?.preferredDate ?? '')
+      if (!scheduledDate) return
+      payload = { type, scheduledDate }
+    }
+    setBusy(a.id)
+    setMessage(null)
+    try {
+      await api.post(`/activities/${a.id}/pickup-actions`, payload)
+      setMessage(`「${a.title}」の回収状態を更新しました`)
+      reload()
+    } catch (e) {
+      setMessage((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const FILTERS =
     me.role === 'city'
       ? [
-          { id: 'submitted', label: '審査待ち' },
-          { id: 'reported', label: '報告書の確認待ち' },
-          { id: 'verified', label: '実績確定' },
+          { id: 'pickup', label: '回収待ち' },
+          { id: 'reported', label: '写真確認待ち' },
+          { id: 'verified', label: '確認済み' },
           { id: '', label: 'すべて' },
         ]
       : [
           { id: '', label: 'すべて' },
-          { id: 'draft', label: '下書き' },
-          { id: 'approved', label: '報告待ち' },
-          { id: 'verified', label: '実績確定' },
+          { id: 'draft', label: '活動報告待ち' },
+          { id: 'reported', label: '確認待ち' },
+          { id: 'verified', label: '確認済み' },
         ]
 
   return (
@@ -80,11 +106,11 @@ export function Activities({ me }: { me: Me }) {
           <h1>活動管理</h1>
           <p className="page-lead">
             {me.role === 'city'
-              ? '団体から届いた申請と報告書をオンラインで審査します。紙の回付は不要です。'
-              : '清掃活動の申請から報告書・写真の提出までをこの画面で完結できます。'}
+              ? '写真付き活動報告を確認し、ごみ回収の手配から完了までを管理します。'
+              : '活動後の写真報告とごみ回収依頼を一度に送信できます。電話・FAXは不要です。'}
           </p>
         </div>
-        {me.role === 'group' && <button onClick={() => setCreating(true)}>＋ 活動を申請する</button>}
+        {me.role === 'group' && <button onClick={() => setCreating(true)}>＋ 活動予定を登録</button>}
       </div>
 
       {message && <div className="alert info">{message}</div>}
@@ -111,7 +137,7 @@ export function Activities({ me }: { me: Me }) {
       )}
 
       <div className="list">
-        {(data ?? []).map((a) => (
+        {visibleActivities.map((a) => (
           <article key={a.id} className="card">
             <div className="spread">
               <div>
@@ -137,6 +163,20 @@ export function Activities({ me }: { me: Me }) {
                   ))}
                 </div>
                 {a.report.comment && <p style={{ marginBottom: 0 }}>{a.report.comment}</p>}
+              </div>
+            )}
+
+            {a.pickupRequest && (
+              <div className="alert info" style={{ marginTop: '0.5rem' }}>
+                {a.pickupRequest.status === 'not_required'
+                  ? 'ごみ回収：不要'
+                  : `ごみ回収：${
+                      a.pickupRequest.status === 'requested'
+                        ? '依頼済み'
+                        : a.pickupRequest.status === 'scheduled'
+                          ? `手配済み（${a.pickupRequest.scheduledDate}）`
+                          : '回収済み'
+                    }／${a.pickupRequest.bagCount}袋／${a.pickupRequest.location?.address ?? ''}`}
               </div>
             )}
 
@@ -169,10 +209,21 @@ export function Activities({ me }: { me: Me }) {
                   {ACTION_LABEL[t]}
                 </button>
               ))}
+              {me.role === 'city' && a.pickupRequest?.status === 'requested' && (
+                <button disabled={busy === a.id} onClick={() => runPickup(a, 'schedule')}>
+                  回収を手配
+                </button>
+              )}
+              {me.role === 'city' &&
+                (a.pickupRequest?.status === 'requested' || a.pickupRequest?.status === 'scheduled') && (
+                  <button className="subtle" disabled={busy === a.id} onClick={() => runPickup(a, 'complete')}>
+                    回収済みにする
+                  </button>
+                )}
             </div>
           </article>
         ))}
-        {data?.length === 0 && <Empty>該当する活動はありません</Empty>}
+        {visibleActivities.length === 0 && <Empty>該当する活動はありません</Empty>}
       </div>
     </>
   )
@@ -180,8 +231,10 @@ export function Activities({ me }: { me: Me }) {
 
 function NewActivityForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { data: wards } = useApi<Ward[]>('/wards')
+  const { data: parks } = useApi<ParkCleanupStatusDto[]>('/parks')
   const [form, setForm] = useState({
     title: '',
+    parkId: '',
     wardId: 'saho',
     scheduledDate: '',
     address: '',
@@ -202,6 +255,7 @@ function NewActivityForm({ onClose, onCreated }: { onClose: () => void; onCreate
         wardId: form.wardId,
         scheduledDate: form.scheduledDate,
         plannedParticipants: Number(form.plannedParticipants),
+        ...(form.parkId ? { parkId: form.parkId } : {}),
         location: { lat: ward.lat, lng: ward.lng, address: form.address || `${ward.name}地区` },
       })
       onCreated()
@@ -215,7 +269,7 @@ function NewActivityForm({ onClose, onCreated }: { onClose: () => void; onCreate
 
   return (
     <div className="card" style={{ marginBottom: '1rem' }}>
-      <h2 style={{ marginTop: 0 }}>清掃活動の申請</h2>
+      <h2 style={{ marginTop: 0 }}>活動予定の登録</h2>
       {error && <div className="alert error">{error}</div>}
       <div className="grid cols-2">
         <div className="field">
@@ -233,6 +287,27 @@ function NewActivityForm({ onClose, onCreated }: { onClose: () => void; onCreate
             value={form.scheduledDate}
             onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })}
           />
+        </div>
+        <div className="field">
+          <label>活動する公園</label>
+          <select
+            value={form.parkId}
+            onChange={(e) => {
+              const park = parks?.find((candidate) => candidate.parkId === e.target.value)
+              setForm({
+                ...form,
+                parkId: e.target.value,
+                ...(park ? { wardId: park.wardId, address: park.name } : {}),
+              })
+            }}
+          >
+            <option value="">公園を選択（任意）</option>
+            {(parks ?? []).map((park) => (
+              <option key={park.parkId} value={park.parkId}>
+                {park.name}（{park.wardName}）
+              </option>
+            ))}
+          </select>
         </div>
         <div className="field">
           <label>地区</label>
@@ -264,14 +339,14 @@ function NewActivityForm({ onClose, onCreated }: { onClose: () => void; onCreate
       </div>
       <div className="row">
         <button onClick={submit} disabled={saving || !form.title || !form.scheduledDate}>
-          申請する
+          登録する
         </button>
         <button className="subtle" onClick={onClose}>
           キャンセル
         </button>
       </div>
       <p className="muted" style={{ marginBottom: 0 }}>
-        申請するとまず下書きとして保存され、「市に申請」で審査に回ります。
+        登録済み団体の定例活動は事前承認不要です。活動後に写真と回収依頼をまとめて送信してください。
       </p>
     </div>
   )
@@ -291,15 +366,45 @@ function ReportForm({
     hours: 2,
     garbageKg: 0,
     comment: '',
-    photos: ['活動前.jpg', '活動後.jpg'],
+    workTypes: ['cleanup'],
+    pickupRequired: true,
+    wasteTypes: ['burnable'],
+    bagCount: 1,
+    pickupAddress: activity.location.address,
+    preferredDate: '',
+    pickupNote: '',
   })
+  const [beforePhoto, setBeforePhoto] = useState<File | null>(null)
+  const [afterPhoto, setAfterPhoto] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  function toggleList(field: 'workTypes' | 'wasteTypes', value: string) {
+    const values = form[field]
+    setForm({ ...form, [field]: values.includes(value) ? values.filter((item) => item !== value) : [...values, value] })
+  }
+
+  function toDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(new Error('写真を読み込めませんでした'))
+      reader.readAsDataURL(file)
+    })
+  }
+
   async function submit() {
+    if (!beforePhoto || !afterPhoto) {
+      setError('活動前と活動後の写真をそれぞれ選択してください')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
+      const photos = await Promise.all([toDataUrl(beforePhoto), toDataUrl(afterPhoto)])
+      const uploaded = await api.post<{ urls: string[] }>(`/activities/${activity.id}/photos`, { photos })
+      const beforePhotoUrls = uploaded.urls.slice(0, 1)
+      const afterPhotoUrls = uploaded.urls.slice(1, 2)
       await api.post(`/activities/${activity.id}/actions`, {
         type: 'report',
         report: {
@@ -307,8 +412,21 @@ function ReportForm({
           hours: Number(form.hours),
           garbageKg: Number(form.garbageKg),
           comment: form.comment,
-          photoUrls: form.photos.map((p) => `/photos/${p}`),
+          workTypes: form.workTypes,
+          photoUrls: uploaded.urls,
+          beforePhotoUrls,
+          afterPhotoUrls,
         },
+        pickupRequest: form.pickupRequired
+          ? {
+              required: true,
+              wasteTypes: form.wasteTypes,
+              bagCount: Number(form.bagCount),
+              location: { ...activity.location, address: form.pickupAddress },
+              preferredDate: form.preferredDate,
+              note: form.pickupNote,
+            }
+          : { required: false },
       })
       onDone()
     } catch (e) {
@@ -320,7 +438,7 @@ function ReportForm({
 
   return (
     <div className="card" style={{ marginBottom: '1rem' }}>
-      <h2 style={{ marginTop: 0 }}>活動報告書 — {activity.title}</h2>
+      <h2 style={{ marginTop: 0 }}>活動報告・ごみ回収依頼 — {activity.title}</h2>
       {error && <div className="alert error">{error}</div>}
       <div className="grid cols-3">
         <div className="field">
@@ -354,32 +472,105 @@ function ReportForm({
         </div>
       </div>
       <div className="field">
-        <label>活動写真（1枚以上が必須）</label>
-        <div className="photo-strip">
-          {form.photos.map((p) => (
-            <div key={p}>{p}</div>
+        <label>実施した作業</label>
+        <div className="row">
+          {([
+            ['cleanup', '清掃'],
+            ['weeding', '除草'],
+            ['pruning', '低木剪定'],
+            ['planting', '花植え'],
+            ['other', 'その他'],
+          ] as const).map(([value, label]) => (
+            <label key={value}>
+              <input
+                type="checkbox"
+                checked={form.workTypes.includes(value)}
+                onChange={() => toggleList('workTypes', value)}
+              />{' '}
+              {label}
+            </label>
           ))}
-          <button
-            className="subtle"
-            onClick={() => setForm({ ...form, photos: [...form.photos, `写真${form.photos.length + 1}.jpg`] })}
-          >
-            ＋ 追加
-          </button>
-          {form.photos.length > 0 && (
-            <button className="subtle" onClick={() => setForm({ ...form, photos: [] })}>
-              すべて削除
-            </button>
-          )}
         </div>
-        <p className="muted">プロトタイプのためファイル名のみを扱います（実装時はスマホ撮影画像を直接添付）。</p>
+      </div>
+      <div className="grid cols-2">
+        <div className="field">
+          <label>活動前の写真（必須）</label>
+          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setBeforePhoto(e.target.files?.[0] ?? null)} />
+        </div>
+        <div className="field">
+          <label>活動後の写真（必須）</label>
+          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setAfterPhoto(e.target.files?.[0] ?? null)} />
+        </div>
       </div>
       <div className="field">
         <label>所感・気づいたこと</label>
         <textarea value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })} />
       </div>
+      <div className="field">
+        <label>
+          <input
+            type="checkbox"
+            checked={form.pickupRequired}
+            onChange={(e) => setForm({ ...form, pickupRequired: e.target.checked })}
+          />{' '}
+          ごみ回収を依頼する
+        </label>
+      </div>
+      {form.pickupRequired && (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <div className="field">
+            <label>ごみの種類</label>
+            <div className="row">
+              {([
+                ['burnable', '可燃'],
+                ['nonBurnable', '不燃'],
+                ['branches', '枝木'],
+                ['grass', '草'],
+                ['other', 'その他'],
+              ] as const).map(([value, label]) => (
+                <label key={value}>
+                  <input
+                    type="checkbox"
+                    checked={form.wasteTypes.includes(value)}
+                    onChange={() => toggleList('wasteTypes', value)}
+                  />{' '}
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid cols-3">
+            <div className="field">
+              <label>袋数</label>
+              <input type="number" min={1} value={form.bagCount} onChange={(e) => setForm({ ...form, bagCount: Number(e.target.value) })} />
+            </div>
+            <div className="field">
+              <label>回収希望日</label>
+              <input type="date" value={form.preferredDate} onChange={(e) => setForm({ ...form, preferredDate: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>回収場所</label>
+              <input value={form.pickupAddress} onChange={(e) => setForm({ ...form, pickupAddress: e.target.value })} />
+            </div>
+          </div>
+          <div className="field">
+            <label>回収時の連絡事項</label>
+            <textarea value={form.pickupNote} onChange={(e) => setForm({ ...form, pickupNote: e.target.value })} />
+          </div>
+        </div>
+      )}
       <div className="row">
-        <button onClick={submit} disabled={saving}>
-          報告書を提出
+        <button
+          onClick={submit}
+          disabled={
+            saving ||
+            !beforePhoto ||
+            !afterPhoto ||
+            form.workTypes.length === 0 ||
+            (form.pickupRequired && (!form.preferredDate || !form.pickupAddress || form.wasteTypes.length === 0))
+          }
+        >
+          活動報告と回収依頼を送信
         </button>
         <button className="subtle" onClick={onClose}>
           キャンセル

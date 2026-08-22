@@ -2,7 +2,8 @@
 import { randomUUID } from 'node:crypto'
 import { DomainError } from './errors.js'
 import { calculateActivityPoints } from './points.js'
-import type { Activity, ActivityReport, ActivityStatus, Actor, NewActivityInput } from './types.js'
+import { createPickupRequest } from './pickup.js'
+import type { Activity, ActivityReport, ActivityStatus, Actor, NewActivityInput, PickupRequestInput } from './types.js'
 
 export class WorkflowError extends DomainError {}
 
@@ -10,7 +11,7 @@ export type ActivityAction =
   | { type: 'submit'; actor: Actor }
   | { type: 'approve'; actor: Actor; note?: string }
   | { type: 'reject'; actor: Actor; reason: string }
-  | { type: 'report'; actor: Actor; report: ActivityReport }
+  | { type: 'report'; actor: Actor; report: ActivityReport; pickupRequest?: PickupRequestInput }
   | { type: 'returnReport'; actor: Actor; reason: string }
   | { type: 'verify'; actor: Actor }
   | { type: 'markPaid'; actor: Actor }
@@ -24,7 +25,9 @@ const RULES: Record<ActionType, { from: ActivityStatus[]; to: ActivityStatus; by
   submit: { from: ['draft'], to: 'submitted', by: 'owner' },
   approve: { from: ['submitted'], to: 'approved', by: 'city' },
   reject: { from: ['submitted'], to: 'rejected', by: 'city' },
-  report: { from: ['approved'], to: 'reported', by: 'owner' },
+  // グリーンサポートの登録済み団体は、定例活動を事前承認なしで事後報告できる。
+  // approved は旧フローのデータを継続して処理するため残す。
+  report: { from: ['draft', 'approved'], to: 'reported', by: 'owner' },
   returnReport: { from: ['reported'], to: 'approved', by: 'city' },
   verify: { from: ['reported'], to: 'verified', by: 'city' },
   markPaid: { from: ['verified'], to: 'paid', by: 'city' },
@@ -40,9 +43,11 @@ export function createActivity(input: NewActivityInput, now: string): Activity {
     scheduledDate: input.scheduledDate,
     location: input.location,
     plannedParticipants: input.plannedParticipants,
+    ...(input.parkId ? { parkId: input.parkId } : {}),
     consecutiveMonths: input.consecutiveMonths ?? 0,
     status: 'draft',
     report: null,
+    pickupRequest: null,
     awardedPoints: 0,
     rejectionReason: null,
     submittedAt: null,
@@ -79,12 +84,16 @@ export function transition(activity: Activity, action: ActivityAction, now: stri
       next.rejectionReason = action.reason
       break
     case 'report':
-      next.report = validateReport(action.report)
+      next.report = validateReport(action.report, activity.status === 'draft')
+      next.pickupRequest = action.pickupRequest ? createPickupRequest(action.pickupRequest, now) : null
       break
     case 'returnReport':
       // 差し戻しでは報告内容を破棄し、承認済み状態からやり直させる
       next.report = null
+      next.pickupRequest = null
       next.rejectionReason = action.reason
+      // 事前申請を経ていない活動は、修正後に再び直接報告できる状態へ戻す。
+      if (!activity.submittedAt) next.status = 'draft'
       break
     case 'verify': {
       const report = activity.report
@@ -122,8 +131,11 @@ function assertPermission(activity: Activity, actor: Actor, by: ActorScope, type
   }
 }
 
-function validateReport(report: ActivityReport): ActivityReport {
+function validateReport(report: ActivityReport, requireBeforeAfter = false): ActivityReport {
   if (report.photoUrls.length === 0) throw new WorkflowError('VALIDATION', '活動写真を1枚以上添付してください')
+  if (requireBeforeAfter && (!report.beforePhotoUrls?.length || !report.afterPhotoUrls?.length)) {
+    throw new WorkflowError('VALIDATION', '活動前と活動後の写真をそれぞれ1枚以上添付してください')
+  }
   if (report.actualParticipants <= 0) throw new WorkflowError('VALIDATION', '参加人数は1人以上で入力してください')
   if (report.hours <= 0) throw new WorkflowError('VALIDATION', '活動時間は0より大きい値で入力してください')
   if (report.garbageKg < 0) throw new WorkflowError('VALIDATION', '回収量は0以上で入力してください')
