@@ -29,7 +29,21 @@ export interface Activity {
     hours: number
     garbageKg: number
     photoUrls: string[]
+    beforePhotoUrls?: string[]
+    afterPhotoUrls?: string[]
+    workTypes?: string[]
     comment: string
+  } | null
+  parkId?: string
+  pickupRequest?: {
+    status: 'not_required' | 'requested' | 'scheduled' | 'collected'
+    wasteTypes: string[]
+    bagCount: number
+    location: { lat: number; lng: number; address: string } | null
+    preferredDate: string | null
+    note: string
+    scheduledDate: string | null
+    collectedAt: string | null
   } | null
   awardedPoints: number
   rejectionReason: string | null
@@ -106,6 +120,25 @@ export interface Stats {
   openEvents: number
   pendingReviews: number
   pendingPayments: number
+  pendingPickups: number
+}
+
+export interface AnnualReportDto {
+  fiscalYear: number
+  totalActivities: number
+  totalParticipants: number
+  totalHours: number
+  totalGarbageKg: number
+  pickupRequests: number
+  byWorkType: Record<string, number>
+  byGroup: {
+    groupId: string
+    groupName: string
+    activityCount: number
+    participants: number
+    hours: number
+    garbageKg: number
+  }[]
 }
 
 export interface MapActivity {

@@ -141,6 +141,42 @@ h2 {
   box-shadow: var(--shadow);
 }
 
+.demo-flow {
+  margin-bottom: 1rem;
+  border-color: #99d5ce;
+  background: linear-gradient(135deg, #fff 0%, #edf8f6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.demo-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  margin: 0.55rem 0 0.3rem;
+  padding-left: 1.4rem;
+  color: var(--muted);
+}
+
+.demo-steps li.current {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.demo-steps li.done {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .demo-flow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .grid {
   display: grid;
   gap: 0.75rem;

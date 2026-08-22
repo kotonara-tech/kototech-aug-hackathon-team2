@@ -1,4 +1,5 @@
 import { useApi } from '../api'
+import { Link } from 'react-router-dom'
 import type { EventDto, GroupDetail, Me } from '../types'
 import { Empty, RankBadge, Stat, formatDate, formatDateTime } from '../components/ui'
 
@@ -24,6 +25,16 @@ export function MyPage({ me }: { me: Me }) {
             <Stat label="累計ポイント" value={me.totalPoints.toLocaleString()} unit="pt" />
             <Stat label="ランク" value={<RankBadge rank={me.rank} />} />
             <Stat label="参加回数" value={me.history.length} unit="回" />
+          </div>
+
+          <div className="card spread" style={{ marginTop: '0.75rem' }}>
+            <div>
+              <strong>次の清掃活動に参加しませんか？</strong>
+              <div className="muted">団体が募集中の活動から、日時や場所を選んで申し込めます。</div>
+            </div>
+            <Link className="btn" to="/events">
+              団体の募集を見る
+            </Link>
           </div>
 
           {me.nextRank && (

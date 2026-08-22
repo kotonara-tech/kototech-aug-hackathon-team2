@@ -80,7 +80,7 @@ export function seedBaseline(repo: Repo): void {
   })
 
   const users: Parameters<Repo['insertUser']>[0][] = [
-    { id: 'u-city', name: '奈良市 環境部 清美課', role: 'city', groupId: null, age: null, totalPoints: 0 },
+    { id: 'u-city', name: '奈良市 地域づくり推進課', role: 'city', groupId: null, age: null, totalPoints: 0 },
     { id: 'u-group-a', name: '田中（佐保川をきれいにする会）', role: 'group', groupId: 'g-a', age: 68, totalPoints: 0 },
     { id: 'u-group-b', name: '西村（ならまち美化クラブ）', role: 'group', groupId: 'g-b', age: 54, totalPoints: 0 },
     { id: 'u-group-c', name: '森本（奈良女子大 環境サークル）', role: 'group', groupId: 'g-c', age: 20, totalPoints: 0 },
@@ -186,8 +186,22 @@ export function seedDemo(repo: Repo, now = new Date().toISOString()): void {
           hours: d.hours,
           garbageKg: d.garbageKg,
           photoUrls: [`/photos/${d.wardId}-before.jpg`, `/photos/${d.wardId}-after.jpg`],
+          beforePhotoUrls: [`/photos/${d.wardId}-before.jpg`],
+          afterPhotoUrls: [`/photos/${d.wardId}-after.jpg`],
+          workTypes: ['cleanup'],
           comment: 'ペットボトル・空き缶が中心でした。',
         },
+        pickupRequest:
+          d.date === '2026-07-12'
+            ? {
+                required: true,
+                wasteTypes: ['burnable'],
+                bagCount: 4,
+                location: { lat: d.lat, lng: d.lng, address: `${d.address} 集積場所` },
+                preferredDate: '2026-07-13',
+                note: '通行の妨げにならない場所に集積しています。',
+              }
+            : { required: false },
       },
       at,
     )
@@ -234,6 +248,21 @@ export function seedDemo(repo: Repo, now = new Date().toISOString()): void {
     now,
   )
   repo.saveActivity(pending)
+
+  // 団体デモ用: 事前承認なしで「活動報告・ごみ回収依頼」を試せる下書き。
+  const demoDraft = createActivity(
+    {
+      groupId: 'g-a',
+      title: '【デモ用】鴻ノ池公園 定例清掃',
+      wardId: 'saho',
+      scheduledDate: '2026-08-23',
+      location: { lat: 34.7025, lng: 135.8033, address: '鴻ノ池運動公園 南口' },
+      plannedParticipants: 10,
+      parkId: 'park-konoike',
+    },
+    now,
+  )
+  repo.saveActivity(demoDraft)
 
   // 募集中のイベント
   const events: VolunteerEvent[] = [

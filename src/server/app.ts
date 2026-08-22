@@ -21,6 +21,7 @@ import { groupsRouter } from './routes/groups.js'
 import { mapRouter } from './routes/map.js'
 import { parksRouter } from './routes/parks.js'
 import { photosRouter } from './routes/photos.js'
+import { reportsRouter } from './routes/reports.js'
 
 export function createApp(repo: Repo): Express {
   const app = express()
@@ -29,7 +30,7 @@ export function createApp(repo: Repo): Express {
   app.use(express.json({ limit: '2mb' }))
   app.use('/api', authenticate(repo))
 
-  app.get('/api/health', (_req, res) => res.json({ ok: true }))
+  app.get('/api/health', (_req, res) => res.json({ ok: true, apiVersion: 'green-support-v2' }))
 
   for (const router of [
     meRouter(repo),
@@ -41,6 +42,7 @@ export function createApp(repo: Repo): Express {
     mapRouter(repo),
     parksRouter(repo),
     photosRouter(repo),
+    reportsRouter(repo),
   ]) {
     app.use('/api', router)
   }

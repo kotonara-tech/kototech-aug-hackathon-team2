@@ -6,8 +6,14 @@ import viteConfig from '../vite.config'
  * キーを前方一致の '/api' にすると、フロントのモジュール '/api.ts' まで
  * API サーバへ転送されてしまい、画面が真っ白になる（実際に踏んだ不具合）。
  */
-function proxyKeys(): string[] {
-  const proxy = (viteConfig as { server?: { proxy?: Record<string, unknown> } }).server?.proxy
+function resolvedConfig(mode = 'development') {
+  if (typeof viteConfig !== 'function') return viteConfig
+
+  return viteConfig({ command: 'serve', mode, isSsrBuild: false, isPreview: false })
+}
+
+function proxyKeys(mode?: string): string[] {
+  const proxy = (resolvedConfig(mode) as { server?: { proxy?: Record<string, unknown> } }).server?.proxy
   return Object.keys(proxy ?? {})
 }
 
@@ -38,5 +44,15 @@ describe('Vite 開発サーバのプロキシ設定', () => {
   it('通常の画面ルートはプロキシしない', () => {
     expect(isProxied('/events')).toBe(false)
     expect(isProxied('/main.tsx')).toBe(false)
+  })
+
+  it('デモモードは専用ポートで起動し、専用APIへ接続する', () => {
+    const server = (resolvedConfig('demo') as {
+      server?: { port?: number; strictPort?: boolean; proxy?: Record<string, string> }
+    }).server
+
+    expect(server?.port).toBe(5180)
+    expect(server?.strictPort).toBe(true)
+    expect(server?.proxy?.['^/api/']).toBe('http://localhost:8790')
   })
 })

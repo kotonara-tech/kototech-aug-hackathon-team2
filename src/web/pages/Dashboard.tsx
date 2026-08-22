@@ -1,15 +1,12 @@
 import { Link } from 'react-router-dom'
 import { useApi } from '../api'
-import type { EventDto, Me, Stats, WardSummary } from '../types'
+import type { Me, Stats, WardSummary } from '../types'
 import { MapView } from '../components/MapView'
-import { Empty, RankBadge, Stat, formatDate } from '../components/ui'
+import { Stat } from '../components/ui'
 
 export function Dashboard({ me }: { me: Me }) {
   const { data: stats } = useApi<Stats>('/stats')
   const { data: wards } = useApi<WardSummary[]>('/map/wards')
-  const { data: events } = useApi<EventDto[]>('/events')
-
-  const openEvents = (events ?? []).filter((e) => e.isOpen).slice(0, 3)
 
   return (
     <>
@@ -29,20 +26,20 @@ export function Dashboard({ me }: { me: Me }) {
         <div className="grid cols-2" style={{ marginTop: '0.75rem' }}>
           <div className="card spread">
             <div>
-              <div className="muted">審査待ちの申請</div>
+              <div className="muted">写真確認待ちの活動報告</div>
               <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{stats?.pendingReviews ?? 0} 件</div>
             </div>
             <Link className="btn" to="/activities">
-              審査する
+              確認する
             </Link>
           </div>
           <div className="card spread">
             <div>
-              <div className="muted">未確定の奨励金</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{stats?.pendingPayments ?? 0} 件</div>
+              <div className="muted">手配・回収待ち</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{stats?.pendingPickups ?? 0} 件</div>
             </div>
-            <Link className="btn" to="/payments">
-              支払処理へ
+            <Link className="btn" to="/activities">
+              回収管理へ
             </Link>
           </div>
         </div>
@@ -86,26 +83,24 @@ export function Dashboard({ me }: { me: Me }) {
         </div>
 
         <div>
-          <h2 style={{ marginTop: 0 }}>募集中のイベント</h2>
-          <div className="list">
-            {openEvents.map((e) => (
-              <div key={e.id} className="card">
-                <div className="spread">
-                  <strong>{e.title}</strong>
-                  <RankBadge rank={`+${e.pointsReward}pt`} />
-                </div>
-                <div className="muted">
-                  {formatDate(e.startsAt)}／{e.wardName}／{e.groupName}
-                </div>
-                <div className="muted">
-                  残り {e.remainingSeats} 席（申込 {e.confirmedCount}人）
-                </div>
-              </div>
-            ))}
-            {openEvents.length === 0 && <Empty>募集中のイベントはありません</Empty>}
-            <Link className="btn ghost" to="/events" style={{ textAlign: 'center' }}>
-              すべてのイベントを見る →
-            </Link>
+          <h2 style={{ marginTop: 0 }}>日常業務</h2>
+          <div className="card">
+            <ol style={{ marginTop: 0 }}>
+              <li>団体が活動前後の写真と実績を報告</li>
+              <li>必要な場合は同時にごみ回収を依頼</li>
+              <li>地域づくり推進課が写真確認と回収手配を更新</li>
+              <li>年度末は確認済み実績を自動集計</li>
+            </ol>
+            <div className="row">
+              <Link className="btn" to="/activities">
+                活動・回収管理
+              </Link>
+              {me.role === 'city' && (
+                <Link className="btn ghost" to="/reports">
+                  年度活動実績
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       </div>
