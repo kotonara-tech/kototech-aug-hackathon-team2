@@ -47,6 +47,22 @@ describe('デモ用の団体フロー', () => {
 
     expect(reported.body.status).toBe('reported')
     expect(reported.body.pickupRequest.status).toBe('requested')
+
+    const scheduled = await request(app)
+      .post(`/api/activities/${activity.id}/pickup-actions`)
+      .set(AS_CITY)
+      .send({ type: 'schedule', scheduledDate: '2026-08-24' })
+      .expect(200)
+
+    expect(scheduled.body.pickupRequest).toMatchObject({
+      status: 'scheduled',
+      scheduledDate: '2026-08-24',
+    })
+    expect(scheduled.body.history.at(-1)).toMatchObject({
+      action: 'schedulePickup',
+      actorId: 'u-city',
+      note: '回収予定日: 2026-08-24',
+    })
   })
 })
 

@@ -168,8 +168,19 @@ export function activitiesRouter(repo: Repo): Router {
       return res.status(400).json({ error: '回収処理の入力内容を確認してください', issues: parsed.error.issues })
     }
 
-    const pickupRequest = updatePickupRequest(activity.pickupRequest, parsed.data as PickupAction, now())
-    const updated = { ...activity, pickupRequest }
+    const at = now()
+    const action = parsed.data as PickupAction
+    const pickupRequest = updatePickupRequest(activity.pickupRequest, action, at)
+    const historyEntry =
+      action.type === 'schedule'
+        ? {
+            action: 'schedulePickup',
+            actorId: req.actor.id,
+            at,
+            note: `回収予定日: ${action.scheduledDate}`,
+          }
+        : { action: 'completePickup', actorId: req.actor.id, at }
+    const updated = { ...activity, pickupRequest, history: [...activity.history, historyEntry] }
     repo.saveActivity(updated)
     res.json(withGroupName(repo, updated))
   })

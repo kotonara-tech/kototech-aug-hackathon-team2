@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api, useApi } from '../api'
+import { api, switchUser, useApi } from '../api'
 import type { Activity, Me, ParkCleanupStatusDto, Ward } from '../types'
 import { Empty, StatusBadge, formatDate, formatDateTime } from '../components/ui'
 
@@ -12,6 +12,8 @@ const ACTION_LABEL: Record<string, string> = {
   verify: '写真確認済みにする',
   markPaid: '支払済みにする',
   cancel: '中止',
+  schedulePickup: 'ごみ回収を手配',
+  completePickup: 'ごみ回収を完了',
 }
 
 /** 役割 × 状態 で「次に押せるボタン」を決める（サーバ側の遷移表と対応） */
@@ -43,6 +45,7 @@ export function Activities({ me }: { me: Me }) {
   const [message, setMessage] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [reportFor, setReportFor] = useState<Activity | null>(null)
+  const demoActivity = (data ?? []).find((activity) => activity.title.startsWith('【デモ用】'))
 
   async function run(a: Activity, type: string) {
     let payload: Record<string, unknown> = { type }
@@ -64,10 +67,12 @@ export function Activities({ me }: { me: Me }) {
     }
   }
 
-  async function runPickup(a: Activity, type: 'schedule' | 'complete') {
+  async function runPickup(a: Activity, type: 'schedule' | 'complete', usePreferredDate = false) {
     let payload: Record<string, unknown> = { type }
     if (type === 'schedule') {
-      const scheduledDate = prompt('回収予定日を入力してください（YYYY-MM-DD）', a.pickupRequest?.preferredDate ?? '')
+      const scheduledDate = usePreferredDate
+        ? a.pickupRequest?.preferredDate
+        : prompt('回収予定日を入力してください（YYYY-MM-DD）', a.pickupRequest?.preferredDate ?? '')
       if (!scheduledDate) return
       payload = { type, scheduledDate }
     }
@@ -75,7 +80,11 @@ export function Activities({ me }: { me: Me }) {
     setMessage(null)
     try {
       await api.post(`/activities/${a.id}/pickup-actions`, payload)
-      setMessage(`「${a.title}」の回収状態を更新しました`)
+      setMessage(
+        type === 'schedule'
+          ? `「${a.title}」のごみ回収を${payload.scheduledDate}で手配しました`
+          : `「${a.title}」をごみ回収済みにしました`,
+      )
       reload()
     } catch (e) {
       setMessage((e as Error).message)
@@ -116,6 +125,44 @@ export function Activities({ me }: { me: Me }) {
       {message && <div className="alert info">{message}</div>}
       {error && <div className="alert error">{error}</div>}
 
+      {demoActivity && (
+        <section className="card demo-flow" aria-label="報告から回収手配までのデモ手順">
+          <div>
+            <strong>デモ：報告書提出からごみ回収手配まで</strong>
+            <ol className="demo-steps">
+              <li className={demoActivity.status === 'draft' ? 'current' : 'done'}>団体が写真付き報告書を提出</li>
+              <li className={demoActivity.pickupRequest?.status === 'requested' ? 'current' : demoActivity.pickupRequest ? 'done' : ''}>
+                地域づくり推進課が回収依頼を確認
+              </li>
+              <li className={demoActivity.pickupRequest?.status === 'scheduled' ? 'done' : ''}>ごみ回収を手配</li>
+            </ol>
+            {demoActivity.status === 'draft' && <div className="muted">下のデモ用活動から報告フォームを開いてください。</div>}
+            {demoActivity.status === 'reported' && demoActivity.pickupRequest?.status === 'requested' && me.role === 'group' && (
+              <div className="muted">報告書と回収依頼を受け付けました。行政側の画面へ進めます。</div>
+            )}
+            {demoActivity.pickupRequest?.status === 'requested' && me.role === 'city' && (
+              <div className="muted">報告書の提出内容を確認できました。希望日で回収を手配してください。</div>
+            )}
+            {demoActivity.pickupRequest?.status === 'scheduled' && (
+              <div className="muted">デモ完了：報告提出から回収手配までの履歴がこの案件に記録されました。</div>
+            )}
+          </div>
+          <div className="row">
+            {demoActivity.status === 'draft' && me.role === 'group' && (
+              <button onClick={() => setReportFor(demoActivity)}>1. 報告書を作成</button>
+            )}
+            {demoActivity.status === 'reported' && demoActivity.pickupRequest?.status === 'requested' && me.role === 'group' && (
+              <button onClick={() => switchUser('u-city')}>2. 地域づくり推進課へ切り替え</button>
+            )}
+            {demoActivity.pickupRequest?.status === 'requested' && me.role === 'city' && (
+              <button disabled={busy === demoActivity.id} onClick={() => runPickup(demoActivity, 'schedule', true)}>
+                3. 回収を手配
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       <div className="chips">
         {FILTERS.map((f) => (
           <button key={f.id} className={`chip ${filter === f.id ? 'active' : ''}`} onClick={() => setFilter(f.id)}>
@@ -129,8 +176,9 @@ export function Activities({ me }: { me: Me }) {
         <ReportForm
           activity={reportFor}
           onClose={() => setReportFor(null)}
-          onDone={() => {
+          onDone={(reportedActivity) => {
             setReportFor(null)
+            setMessage(`「${reportedActivity.title}」の報告書を提出し、ごみ回収を依頼しました`)
             reload()
           }}
         />
@@ -359,7 +407,7 @@ function ReportForm({
 }: {
   activity: Activity
   onClose: () => void
-  onDone: () => void
+  onDone: (reportedActivity: Activity) => void
 }) {
   const [form, setForm] = useState({
     actualParticipants: activity.plannedParticipants,
@@ -430,7 +478,7 @@ function ReportForm({
       const uploaded = await api.post<{ urls: string[] }>(`/activities/${activity.id}/photos`, { photos })
       const beforePhotoUrls = uploaded.urls.slice(0, 1)
       const afterPhotoUrls = uploaded.urls.slice(1, 2)
-      await api.post(`/activities/${activity.id}/actions`, {
+      const reportedActivity = await api.post<Activity>(`/activities/${activity.id}/actions`, {
         type: 'report',
         report: {
           actualParticipants: Number(form.actualParticipants),
@@ -453,7 +501,7 @@ function ReportForm({
             }
           : { required: false },
       })
-      onDone()
+      onDone(reportedActivity)
     } catch (e) {
       setError((e as Error).message)
     } finally {
