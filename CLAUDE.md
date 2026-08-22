@@ -2,6 +2,8 @@
 
 グランドルール（TDD 強制）は `~/.claude/CLAUDE.md` を参照。ここには本プロジェクト固有の情報だけを書く。
 
+#解決する課題とグリーンサポート制度の情報 https://www.city.nara.lg.jp/soshiki/4/266266.html https://www.city.nara.lg.jp/soshiki/20/8253.html https://www.city.nara.lg.jp/uploaded/attachment/181911.pdf https://www.city.nara.lg.jp/uploaded/attachment/203695.pdf
+
 ## コマンド
 
 ```bash
